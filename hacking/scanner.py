@@ -38,8 +38,8 @@ class SSLChecker:
         except Exception as e:
             print(f"Error for {ip}: {e}")
         return ip,"" #return tuple of ip and empty string if common name not found
-    async def extract_domains():
-        try:
+    async def extract_domains(self): #self is commented out , check for this in later version
+        #try:
             with open(self.mass_scan_results_file,"r") as file:
                 content=file.read()
             
@@ -47,11 +47,11 @@ class SSLChecker:
             ip_addresses = re.findall(ip_pattern,content)
             
             for i in range(0,len(ip_addresses),self.chunkSize):
-             async with aiohttp.ClientSession(connector = aiohttp.TCPConnector(limit= self.MAX_CONCURRENT,ssl = False)) as session: #create a seesion for me to make request
-                chunk_of_IPs = ip_addresses[i:i+self.chunkSize]
-                ip_and_common_names = []
+              async with aiohttp.ClientSession(connector = aiohttp.TCPConnector(limit= self.MAX_CONCURRENT,ssl = False)) as session: #create a seesion for me to make request
+                 chunk_of_IPs = ip_addresses[i:i+self.chunkSize]
+                 ip_and_common_names = []
                 
-                ip_and_common_names = await asyncio.gather(*[self.fetch_certificate(ip) for ip in chunk_of_IPs])  #look chunk of IPs and fetch certificate
+                 ip_and_common_names = await asyncio.gather(*[self.fetch_certificate(ip) for ip in chunk_of_IPs])  #look chunk of IPs and fetch certificate
                 #response of fetch_cert is waiting in IO buffer and post it to ip_and_common_name
                 #ayncio uses single thread at a time
                 # thats why it is so fast, takes what to run and then run
