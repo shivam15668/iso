@@ -31,7 +31,7 @@ class SSLChecker:
     async def check_site(self,session,ip,common_name):
         try:
          #semaphore to limit amount of requests
-            async with self.semaphore:    
+            async with self.semaphore:  #run whatever we have inside semaphore 70 times in parallel maximum  
                 temp_dict = {}
                 if "*" in common_name or not self.is_valid_domain(common_name):
                   for protocol in self.protocols: # we have 2 protocols to deal with http, https
@@ -64,7 +64,7 @@ class SSLChecker:
                     for protocol in self.protocols:
                        
                        dict_res = await self.makeGetRequestToDomain(session,protocol,ip,common_name,True)
-                       temp_dict[f'{protocol.replace("://","")}_responseForIP'] = dict_res
+                       temp_dict[f'{protocol.replace("://","")}_responseForIP'] = dict_res # 2 values http_requestForIP and https_requestForIp
                     temp_dict = {k: v for k,v in temp_dict.items() if v is not None}
                     if temp_dict:
                         return temp_dict
