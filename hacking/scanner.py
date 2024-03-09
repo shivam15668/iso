@@ -60,8 +60,23 @@ class SSLChecker:
                        
                        dict_res = await self.makeGetRequestToDomain(session,protocol,ip,common_name,False)
                        temp_dict[f'{protocol.replace("://","")}_responseForDomainName'] = dict_res
+                       # if we have valid domain , make request using domain name and ip address to get max info
+                    for protocol in self.protocols:
+                       
+                       dict_res = await self.makeGetRequestToDomain(session,protocol,ip,common_name,True)
+                       temp_dict[f'{protocol.replace("://","")}_responseForIP'] = dict_res
+                    temp_dict = {k: v for k,v in temp_dict.items() if v is not None}
+                    if temp_dict:
+                        return temp_dict
+                    
         except Exception as e:
-            pass
+            print("Error for ",ip,":",e)
+        return None
+    
+    
+    
+    
+    
     async def fetch_certificate(self,ip):
         try:
             cert  = await  asyncio.to_thread(ssl.get_server_certificate(ip,self.ssl_port),timeout = self.timeout)
