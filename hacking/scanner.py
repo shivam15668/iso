@@ -4,11 +4,13 @@ import ssl
 import subprocess
 import asyncio
 from OpenSSL import crypto
-import aiohttp #module to make concurrent request 
+import aiohttp #module to make concurrent request
+#from cryptography import x509 # if we work with commented cert_thread
+#from cryptography.hazmat.backends import default_backend
 class SSLChecker:
 
     
-    def __init__(self, ssl_port= 443, MAX_CONCURRENT = 100, mass_scan_results_file="masscanResults.txt", ips_file= "ips.txt",masscan_rate = 10000 , chunkSize= 2000 ,timeout =2  ):  
+    def __init__(self, ssl_port= 443, MAX_CONCURRENT = 100, mass_scan_results_file="masscanResults.txt", ips_file= "ips.txt",masscan_rate = 10000 , chunkSize= 2000 ,timeout =2 ,semaphore_limit = 70 ):  
         self.ssl_port = ssl_port
         self.timeout = timeout
         self.chunkSize = chunkSize
@@ -16,7 +18,12 @@ class SSLChecker:
         self.ips_file = ips_file
         self.masscan_rate = masscan_rate
         self.MAX_CONCURRENT = MAX_CONCURRENT
-    
+        self.semaphore_limit = asyncio.Semaphore(semaphore_limit)
+    async def check_site(self,session,ip,common_name):
+        try:
+         #semaphore to limit amount of requests    
+        except Exception as e:
+            pass
     async def fetch_certificate(self,ip):
         try:
             cert  = await  asyncio.to_thread(ssl.get_server_certificate(ip,self.ssl_port),timeout = self.timeout)
@@ -38,8 +45,8 @@ class SSLChecker:
         except Exception as e:
             print(f"Error for {ip}: {e}")
         return ip,"" #return tuple of ip and empty string if common name not found
-    async def extract_domains():
-        try:
+    async def extract_domains(self): #self is commented out , check for this in later version
+        #try:
             with open(self.mass_scan_results_file,"r") as file:
                 content=file.read()
             
@@ -47,18 +54,18 @@ class SSLChecker:
             ip_addresses = re.findall(ip_pattern,content)
             
             for i in range(0,len(ip_addresses),self.chunkSize):
-             async with aiohttp.ClientSession(connector = aiohttp.TCPConnector(limit= self.MAX_CONCURRENT,ssl = False)) as session: #create a seesion for me to make request
-                chunk_of_IPs = ip_addresses[i:i+self.chunkSize]
-                ip_and_common_names = []
+              async with aiohttp.ClientSession(connector = aiohttp.TCPConnector(limit= self.MAX_CONCURRENT,ssl = False)) as session: #create a seesion for me to make request
+                 chunk_of_IPs = ip_addresses[i:i+self.chunkSize]
+                 ip_and_common_names = []
                 
-                ip_and_common_names = await asyncio.gather(*[self.fetch_certificate(ip) for ip in chunk_of_IPs])  #look chunk of IPs and fetch certificate
+                 ip_and_common_names = await asyncio.gather(*[self.fetch_certificate(ip) for ip in chunk_of_IPs])  #look chunk of IPs and fetch certificate
                 #response of fetch_cert is waiting in IO buffer and post it to ip_and_common_name
                 #ayncio uses single thread at a time
                 # thats why it is so fast, takes what to run and then run
                 # much like event loop in node js , doesn't wait for target server to respond , just runs the next one
                 # runs one single thread, and deals with multiple calls, function using a single thread
                 # asyncio.gather uses only one thread
-  
+                 await asyncio.gather(*[self.check_sites(session,ip,common_name)for ip,common_name in ip_and_common_names]) # create fuunction check_site and giving ip and common_name to gather info
   
   
   
@@ -95,4 +102,5 @@ class SSLChecker:
 
 if __name__ == "__main__":
     ssl_checker = SSLChecker()
-    ssl_checker.main()
+    asyncio.run(ssl_checker.main())
+    # purpose is to create a new event loop for duration of call and close after function is completed
