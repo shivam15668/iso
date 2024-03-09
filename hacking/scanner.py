@@ -118,7 +118,7 @@ class SSLChecker:
                 # much like event loop in node js , doesn't wait for target server to respond , just runs the next one
                 # runs one single thread, and deals with multiple calls, function using a single thread
                 # asyncio.gather uses only one thread
-                 await asyncio.gather(*[self.check_sites(session,ip,common_name)for ip,common_name in ip_and_common_names]) # create fuunction check_site and giving ip and common_name to gather info
+                 allResponses = await asyncio.gather(*[self.check_sites(session,ip,common_name)for ip,common_name in ip_and_common_names]) # create fuunction check_site and giving ip and common_name to gather info
   
   
   
