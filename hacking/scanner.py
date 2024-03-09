@@ -10,18 +10,56 @@ import aiohttp #module to make concurrent request
 class SSLChecker:
 
     
-    def __init__(self, ssl_port= 443, MAX_CONCURRENT = 100, mass_scan_results_file="masscanResults.txt", ips_file= "ips.txt",masscan_rate = 10000 , chunkSize= 2000 ,timeout =2 ,semaphore_limit = 70 ):  
+    def __init__(self, ssl_port= 443, MAX_CONCURRENT = 100, mass_scan_results_file="masscanResults.txt", ips_file= "ips.txt",masscan_rate = 10000 , chunkSize= 2000 ,timeout =2 ,semaphore_limit = 70 , protocols = ["http://", "https://"]):  
         self.ssl_port = ssl_port
         self.timeout = timeout
         self.chunkSize = chunkSize
         self.mass_scan_results_file= mass_scan_results_file
         self.ips_file = ips_file
         self.masscan_rate = masscan_rate
+        self.protocols = protocols
         self.MAX_CONCURRENT = MAX_CONCURRENT
         self.semaphore_limit = asyncio.Semaphore(semaphore_limit)
+    
+    def is_valid_domain(self,common_name):
+         domain_pattern = r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+         return re.match(domain_pattern,common_name) is not None
+    
+    
+    
+    
     async def check_site(self,session,ip,common_name):
         try:
-         #semaphore to limit amount of requests    
+         #semaphore to limit amount of requests
+            async with self.semaphore:    
+                temp_dict = {}
+                if "*" in common_name or not self.is_valid_domain(common_name):
+                  for protocol in self.protocols: # we have 2 protocols to deal with http, https
+                     dict_res = await self.makeGetRequestToDomain(session, protocol,ip,common_name, True)
+                     temp_dict[f'{protocol.replace("://","")}_responseForIP'] = dict_res
+                     # we will have http_responseForIP
+                     """
+                     {
+                        http_responseForIP:{
+                            name:"adam"
+                        },
+                         https_responseForIP:{
+                             name:"adam"
+                          }
+                        
+                     }
+                    """
+                   # so if the common name isnot yahoo.com and just yahoo or *yahoo.com then you are going to make request using IP address , 2 request , one on http and one on https
+                   # http://122.22.33.44
+                   # https://122.23.23.44
+                   # if you dont have a domain name
+                   # just make 2 request using ip
+                   # we pass true so as to make request in special names
+                else:
+                    for protocol in self.protocols:
+                       
+                       dict_res = await self.makeGetRequestToDomain(session,protocol,ip,common_name,False)
+                       temp_dict[f'{protocol.replace("://","")}_responseForDomainName'] = dict_res
         except Exception as e:
             pass
     async def fetch_certificate(self,ip):
