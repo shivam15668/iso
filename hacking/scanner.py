@@ -25,7 +25,29 @@ class SSLChecker:
          domain_pattern = r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
          return re.match(domain_pattern,common_name) is not None
     
-    
+    async def makeGetRequestToDomain(self,session,ip,protocol,common_name,makeGetRequesByIP=True):
+        async def parseResponse(url,port):
+            try:
+                if self.semaphore.locked():
+                    await asyncio.sleep(1)
+                redirected_domain = ""
+                response_headers = {}
+                first_300_words = ""
+                title= ""
+                
+                async with session.get(url,allow_redirects=True, timeout = self.timeout,ssl = False) as res:
+                    # we want to allow rediects to happen # we will make http request so we dont use ssl certificated all the time
+                    response = await res.text(encoding = "utf-8")
+                    content_type  = res.headers.get("Content-Type")
+                    ""
+                    if res.headers is not None:
+                        for key,value in res.headers.items():
+                            response_headers[key] = value.encode("utf-8","surrogatepass").decode("utf-8")# if on the way to encoding , come across special , ignore them and decode(rest) them as they are
+                    
+                    
+                    
+            except Exception as e:
+                pass
     
     
     async def check_site(self,session,ip,common_name):
@@ -98,6 +120,11 @@ class SSLChecker:
         except Exception as e:
             print(f"Error for {ip}: {e}")
         return ip,"" #return tuple of ip and empty string if common name not found
+    
+    
+    
+    
+    
     async def extract_domains(self): #self is commented out , check for this in later version
         #try:
             with open(self.mass_scan_results_file,"r") as file:
@@ -133,6 +160,9 @@ class SSLChecker:
             print("Masscan executable not found")
         except Exception as e:
             print(f"An unexpected error occured: {e}")
+    
+    
+    
     def check_and_create_files(self,*file_paths):
         for file_path in file_paths:
             if not os.path.exists(file_path):
