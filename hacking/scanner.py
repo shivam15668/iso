@@ -28,7 +28,7 @@ class SSLChecker:
          domain_pattern = r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
          return re.match(domain_pattern,common_name) is not None
     
-    async def makeGetRequestToDomain(self,session,ip,protocol,common_name,makeGetRequesByIP=True):
+    async def makeGetRequestToDomain(self,session,ip,protocol,common_name,makeGetRequestByIP=True):
         async def parseResponse(url,port):
             try:
                 if self.semaphore.locked():
@@ -90,7 +90,19 @@ class SSLChecker:
                                 if not body_tag or not title_tag:
                                     words = response.split()
                                     first_300_words = " ".join(words[:300])
+                                
+                            elif "plain" in content_type:
+                                words = response.split()
+                                first_300_words = " ".join(words[:300])
                                     
+                            elif "json" in content_type:
+                                 first_300_words = response[:300]
+                                 
+                            if makeGetRequestByIP:
+                                print(f"Title: {title} , {protocol}{ip}:{port}")
+                            else:
+                                print(f"Title: {title}, {protocol}{common_name}:{port}")
+                                
                             
             
             except Exception as e:
