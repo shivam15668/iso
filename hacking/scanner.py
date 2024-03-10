@@ -103,10 +103,27 @@ class SSLChecker:
                             else:
                                 print(f"Title: {title}, {protocol}{common_name}:{port}")
                                 
-                            
+                            result_dict = {
+                                "title": title.encode("utf-8", "surrogatepass").decode("utf-8"),
+                                "request": f"{protocol}{ip if makeGetRequestByIP else common_name}:{port}",
+                                "redirected_url":redirected_domain,
+                                "ip":ip,
+                                "port":str(port),
+                                "domain":common_name,
+                                "response_text": first_300_words,
+                                "response_headers": response_headers # these are all what we will store in the database
+                            }
+                            return result_dict
+            except ET.ParseError as e:
+                print(f"Error Parsing XML: {e}")
             
             except Exception as e:
-                pass
+                if makeGetRequestByIP:
+                    print(f"Error for: {protocol}{ip}:{port},{e}")
+                else:
+                    print(f"Error for: {protocol}{common_name}:{port},{e}")
+            return None   
+                    
     
     
     async def check_site(self,session,ip,common_name):
