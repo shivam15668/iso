@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup, SoupStrainer
 class SSLChecker:
 
     
-    def __init__(self, ssl_port= 443, MAX_CONCURRENT = 100, mass_scan_results_file="masscanResults.txt", ips_file= "ips.txt",masscan_rate = 10000 , chunkSize= 2000 ,timeout =2 ,semaphore_limit = 70 , protocols = ["http://", "https://"]):  
+    def __init__(self, ssl_port= 443, MAX_CONCURRENT = 100, mass_scan_results_file="masscanResults.txt", ips_file= "ips.txt",masscan_rate = 10000 , chunkSize= 2000 ,timeout =2 ,semaphore_limit = 70 , protocols = ["http://", "https://"], server_url = "http://127.0.0.1:5000/insert",ports = [80]):  
         self.ssl_port = ssl_port
         self.timeout = timeout
         self.chunkSize = chunkSize
@@ -23,10 +23,17 @@ class SSLChecker:
         self.protocols = protocols
         self.MAX_CONCURRENT = MAX_CONCURRENT
         self.semaphore_limit = asyncio.Semaphore(semaphore_limit)
+        self.server_url = server_url
+        self.ports = ports
+    
+    
     
     def is_valid_domain(self,common_name):
          domain_pattern = r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
          return re.match(domain_pattern,common_name) is not None
+    
+    
+    
     
     async def makeGetRequestToDomain(self,session,ip,protocol,common_name,makeGetRequestByIP=True):
         async def parseResponse(url,port):
@@ -226,7 +233,7 @@ class SSLChecker:
     
     
     async def extract_domains(self): #self is commented out , check for this in later version
-        #try:
+        try:
             with open(self.mass_scan_results_file,"r") as file:
                 content=file.read()
             
@@ -247,8 +254,25 @@ class SSLChecker:
                 # asyncio.gather uses only one thread
                  allResponses = await asyncio.gather(*[self.check_sites(session,ip,common_name)for ip,common_name in ip_and_common_names]) # create fuunction check_site and giving ip and common_name to gather info
   
-  
-  
+                 allResponses = [response for response in allResponses if response is not None]
+                 
+                 result_json = json.dumps(allResponses) # takes in allResponses # because json is expected in backend not python only json
+                 headers = {"content-Type":"application/json"}
+                 
+                 async with session.post(self.server_url, data = result_json , headers = headers, ssl = False) as res:
+                     if res.status == 201 or res.status == 200:
+                         print("*********** Results inserted successfully******")
+                     else:
+                         print(f"failed to insert result. Status code :{ res.status}")
+                         
+                     print(await res.text())
+                     
+                     await session.close()
+                     del allResponses
+                     del result_json
+                     del ip_and_common_names
+        except Exception as e :
+            print(f"An unexpected error occured : {e}")
   
     def run_masscan(self):
         try:
