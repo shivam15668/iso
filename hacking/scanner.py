@@ -124,8 +124,32 @@ class SSLChecker:
                     print(f"Error for: {protocol}{common_name}:{port},{e}")
             return None   
                     
-    
-    
+        url = ""
+        if makeGetRequestByIP:
+            if protocol == "http://":  #99% time http://192.189.23.12:34293 we will get this 
+                # if we have port apart from 80,443 , we will have ip followed by port https://193.24.234.23:93445  https://ip:port is rare though , focus on http
+                httpResults = []
+                for port in self.ports:
+                   url = f"{protocol}{ip}:{port}"
+                   result = await parseResponse(url,port)
+                   if result is not None:
+                       httpResults.append(result)
+                if httpResults:
+                    return httpResults
+                else:
+                    return None
+            else:
+                url = f"{protocol}:{ip}{self.ssl_port}"
+                return await parseResponse(url,self.ssl_port)
+            
+        #if protocol actually is http , use port 80 , else use ssl , port 443
+        else:
+            port = "80" if protocol == "http://" else self.ssl_port
+            url = f"{protocol}{common_name}:{port}"
+            return await parseResponse(url,port)
+            
+            
+            
     async def check_site(self,session,ip,common_name):
         try:
          #semaphore to limit amount of requests
