@@ -3,10 +3,13 @@ import re
 import ssl
 import subprocess
 import asyncio
+import json
 from OpenSSL import crypto
 import aiohttp #module to make concurrent request
 #from cryptography import x509 # if we work with commented cert_thread
 #from cryptography.hazmat.backends import default_backend
+import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup, SoupStrainer
 class SSLChecker:
 
     
@@ -44,8 +47,47 @@ class SSLChecker:
                         for key,value in res.headers.items():
                             response_headers[key] = value.encode("utf-8","surrogatepass").decode("utf-8")# if on the way to encoding , come across special , ignore them and decode(rest) them as they are
                     
+                    if res.history:
+                        redirected_domain = str(res.url) #to get redirected url
                     
+                    #parsing our data
                     
+                    if response is not None and content_type is not None:
+                        if "xml" in content_type:
+                            root = ET.fromstring(response)
+                            # if content_type we get from target is xml , ET.fromstring will help us to get xml values
+                            # we get xml root
+                            xmlwords = []
+                            count = 0 
+                            
+                            for elem in root.iter():
+                                if elem.text:
+                                    xmlwords.extend(elem.text.split())
+                                    count+= len(xmlwords)
+                                if count >= 300:
+                                    break
+                            if xmlwords:
+                                first_300_words = " ".join(xmlwords[:300]) #join list by space
+                                # xmlwords = ["adam","jhon"]
+                                # adam john
+                            elif"html" in content_type:
+                                # we have multiple content_type that we can recieve from target
+                                strainer = SoupStrainer(["title","body"])
+                                #soupstrainer is faster to extract content from html 
+                                soup = BeautifulSoup(response,"html.parser",parse_only = strainer)
+                                title_tag = soup.title
+                                body_tag = soup.body
+                                
+                                if title_tag and title_tag.string:
+                                    title = title_tag.string.strip() # strip removes spaces at beginning or end of strings
+                                
+                                if body_tag:
+                                    body_text = body_tag.get_text(separator = " " , strip = True)
+                                    words = body_text.split() # we get x amount of word from body
+                                    # hello how are you  -> ["hello", "how", "are", "you"] -> words[:2]
+                                    first_300_words = " ".join(words[:300])
+            
+            
             except Exception as e:
                 pass
     
