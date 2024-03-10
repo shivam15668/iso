@@ -3,14 +3,17 @@ import re
 import ssl
 import subprocess
 import asyncio
+import json
 from OpenSSL import crypto
 import aiohttp #module to make concurrent request
 #from cryptography import x509 # if we work with commented cert_thread
 #from cryptography.hazmat.backends import default_backend
+import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup, SoupStrainer
 class SSLChecker:
 
     
-    def __init__(self, ssl_port= 443, MAX_CONCURRENT = 100, mass_scan_results_file="masscanResults.txt", ips_file= "ips.txt",masscan_rate = 10000 , chunkSize= 2000 ,timeout =2 ,semaphore_limit = 70 , protocols = ["http://", "https://"]):  
+    def __init__(self, ssl_port= 443, MAX_CONCURRENT = 100, mass_scan_results_file="masscanResults.txt", ips_file= "ips.txt",masscan_rate = 10000 , chunkSize= 2000 ,timeout =2 ,semaphore_limit = 70 , protocols = ["http://", "https://"], server_url = "http://127.0.0.1:5000/insert",ports = [80]):  
         self.ssl_port = ssl_port
         self.timeout = timeout
         self.chunkSize = chunkSize
@@ -20,6 +23,10 @@ class SSLChecker:
         self.protocols = protocols
         self.MAX_CONCURRENT = MAX_CONCURRENT
         self.semaphore_limit = asyncio.Semaphore(semaphore_limit)
+        self.server_url = server_url
+        self.ports = ports
+    
+    
     
     def is_valid_domain(self,common_name):
          domain_pattern = r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -28,6 +35,128 @@ class SSLChecker:
     
     
     
+    async def makeGetRequestToDomain(self,session,ip,protocol,common_name,makeGetRequestByIP=True):
+        async def parseResponse(url,port):
+            try:
+                if self.semaphore.locked():
+                    await asyncio.sleep(1)
+                redirected_domain = ""
+                response_headers = {}
+                first_300_words = ""
+                title= ""
+                
+                async with session.get(url,allow_redirects=True, timeout = self.timeout,ssl = False) as res:
+                    # we want to allow rediects to happen # we will make http request so we dont use ssl certificated all the time
+                    response = await res.text(encoding = "utf-8")
+                    content_type  = res.headers.get("Content-Type")
+                    ""
+                    if res.headers is not None:
+                        for key,value in res.headers.items():
+                            response_headers[key] = value.encode("utf-8","surrogatepass").decode("utf-8")# if on the way to encoding , come across special , ignore them and decode(rest) them as they are
+                    
+                    if res.history:
+                        redirected_domain = str(res.url) #to get redirected url
+                    
+                    #parsing our data
+                    
+                    if response is not None and content_type is not None:
+                        if "xml" in content_type:
+                            root = ET.fromstring(response)
+                            # if content_type we get from target is xml , ET.fromstring will help us to get xml values
+                            # we get xml root
+                            xmlwords = []
+                            count = 0 
+                            
+                            for elem in root.iter():
+                                if elem.text:
+                                    xmlwords.extend(elem.text.split())
+                                    count+= len(xmlwords)
+                                if count >= 300:
+                                    break
+                            if xmlwords:
+                                first_300_words = " ".join(xmlwords[:300]) #join list by space
+                                # xmlwords = ["adam","jhon"]
+                                # adam john
+                            elif"html" in content_type:
+                                # we have multiple content_type that we can recieve from target
+                                strainer = SoupStrainer(["title","body"])
+                                #soupstrainer is faster to extract content from html 
+                                soup = BeautifulSoup(response,"html.parser",parse_only = strainer)
+                                title_tag = soup.title
+                                body_tag = soup.body
+                                
+                                if title_tag and title_tag.string:
+                                    title = title_tag.string.strip() # strip removes spaces at beginning or end of strings
+                                
+                                if body_tag:
+                                    body_text = body_tag.get_text(separator = " " , strip = True)
+                                    words = body_text.split() # we get x amount of word from body
+                                    # hello how are you  -> ["hello", "how", "are", "you"] -> words[:2]
+                                    first_300_words = " ".join(words[:300])
+                                
+                                if not body_tag or not title_tag:
+                                    words = response.split()
+                                    first_300_words = " ".join(words[:300])
+                                
+                            elif "plain" in content_type:
+                                words = response.split()
+                                first_300_words = " ".join(words[:300])
+                                    
+                            elif "json" in content_type:
+                                 first_300_words = response[:300]
+                                 
+                            if makeGetRequestByIP:
+                                print(f"Title: {title} , {protocol}{ip}:{port}")
+                            else:
+                                print(f"Title: {title}, {protocol}{common_name}:{port}")
+                                
+                            result_dict = {
+                                "title": title.encode("utf-8", "surrogatepass").decode("utf-8"),
+                                "request": f"{protocol}{ip if makeGetRequestByIP else common_name}:{port}",
+                                "redirected_url":redirected_domain,
+                                "ip":ip,
+                                "port":str(port),
+                                "domain":common_name,
+                                "response_text": first_300_words,
+                                "response_headers": response_headers # these are all what we will store in the database
+                            }
+                            return result_dict
+            except ET.ParseError as e:
+                print(f"Error Parsing XML: {e}")
+            
+            except Exception as e:
+                if makeGetRequestByIP:
+                    print(f"Error for: {protocol}{ip}:{port},{e}")
+                else:
+                    print(f"Error for: {protocol}{common_name}:{port},{e}")
+            return None   
+                    
+        url = ""
+        if makeGetRequestByIP:
+            if protocol == "http://":  #99% time http://192.189.23.12:34293 we will get this 
+                # if we have port apart from 80,443 , we will have ip followed by port https://193.24.234.23:93445  https://ip:port is rare though , focus on http
+                httpResults = []
+                for port in self.ports:
+                   url = f"{protocol}{ip}:{port}"
+                   result = await parseResponse(url,port)
+                   if result is not None:
+                       httpResults.append(result)
+                if httpResults:
+                    return httpResults
+                else:
+                    return None
+            else:
+                url = f"{protocol}:{ip}{self.ssl_port}"
+                return await parseResponse(url,self.ssl_port)
+            
+        #if protocol actually is http , use port 80 , else use ssl , port 443
+        else:
+            port = "80" if protocol == "http://" else self.ssl_port
+            url = f"{protocol}{common_name}:{port}"
+            return await parseResponse(url,port)
+            
+            
+            
     async def check_site(self,session,ip,common_name):
         try:
          #semaphore to limit amount of requests
@@ -98,8 +227,13 @@ class SSLChecker:
         except Exception as e:
             print(f"Error for {ip}: {e}")
         return ip,"" #return tuple of ip and empty string if common name not found
+    
+    
+    
+    
+    
     async def extract_domains(self): #self is commented out , check for this in later version
-        #try:
+        try:
             with open(self.mass_scan_results_file,"r") as file:
                 content=file.read()
             
@@ -120,8 +254,25 @@ class SSLChecker:
                 # asyncio.gather uses only one thread
                  allResponses = await asyncio.gather(*[self.check_sites(session,ip,common_name)for ip,common_name in ip_and_common_names]) # create fuunction check_site and giving ip and common_name to gather info
   
-  
-  
+                 allResponses = [response for response in allResponses if response is not None]
+                 
+                 result_json = json.dumps(allResponses) # takes in allResponses # because json is expected in backend not python only json
+                 headers = {"content-Type":"application/json"}
+                 
+                 async with session.post(self.server_url, data = result_json , headers = headers, ssl = False) as res:
+                     if res.status == 201 or res.status == 200:
+                         print("*********** Results inserted successfully******")
+                     else:
+                         print(f"failed to insert result. Status code :{ res.status}")
+                         
+                     print(await res.text())
+                     
+                     await session.close()
+                     del allResponses
+                     del result_json
+                     del ip_and_common_names
+        except Exception as e :
+            print(f"An unexpected error occured : {e}")
   
     def run_masscan(self):
         try:
@@ -133,6 +284,9 @@ class SSLChecker:
             print("Masscan executable not found")
         except Exception as e:
             print(f"An unexpected error occured: {e}")
+    
+    
+    
     def check_and_create_files(self,*file_paths):
         for file_path in file_paths:
             if not os.path.exists(file_path):
