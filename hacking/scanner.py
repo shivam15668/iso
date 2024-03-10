@@ -86,7 +86,12 @@ class SSLChecker:
                                     words = body_text.split() # we get x amount of word from body
                                     # hello how are you  -> ["hello", "how", "are", "you"] -> words[:2]
                                     first_300_words = " ".join(words[:300])
-            
+                                
+                                if not body_tag or not title_tag:
+                                    words = response.split()
+                                    first_300_words = " ".join(words[:300])
+                                    
+                            
             
             except Exception as e:
                 pass
