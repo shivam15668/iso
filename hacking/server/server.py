@@ -49,6 +49,7 @@ def insert():
         return jsonify({"error":str(e)}),500
    
 if __name__ == "__main__":
-    app.run(host = "0.0.0.0", port = 5000 , debug = True) # app is Flask instance , run is method which runs   
+    app.run(host = "0.0.0.0", port = 5000 , debug = True) # app is Flask instance , run is method which runs  
+    # 0.0.0.0 to be available on all network interface , port 5000 is default for flask , we will change for production though  
     
     
