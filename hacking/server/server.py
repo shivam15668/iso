@@ -28,5 +28,27 @@ client = MongoClient(mongo_url)
 try:
     db = client["scannerdb"]
     collection = db["sslchecker"] # collections are in mongodb where we store all our information in json file 
+    print(f"MongoDB connection successful")
 except Exception as e:
     print(f"Error connection to MongoDB: {str(e)}")
+    
+@app.errorhandler(Exception)
+def handle_database_error(e):
+    return "An error occurred while connecting to database. ",500
+
+# we will create a root now using decorator 
+@app.route("/insert",methods = ["POST"])
+def insert():
+    try:
+        result_json = request.get_json()
+        collection.insert_many(result_json)
+        # get json data from flask as requested by client add to container
+        return jsonify({"message":"Inserted"}) # message is key , inserted value # res.text from scanner.py 
+    except Exception as e: 
+        print(f"Error while inserting data into the database: {str()}")
+        return jsonify({"error":str(e)}),500
+   
+if __name__ == "__main__":
+    app.run(host = "0.0.0.0", port = 5000 , debug = True) # app is Flask instance , run is method which runs   
+    
+    
