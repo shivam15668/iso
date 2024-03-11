@@ -11,3 +11,8 @@
 # mongosh
 # sudo systemctl enable mongod.service # auto restart
 # mongodb compass download for gui 
+# pip install Flask
+# pip install pymongo
+# pip install gunicorn
+# json module
+# re module 
